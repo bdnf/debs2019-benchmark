@@ -8,6 +8,7 @@ import numpy
 dataset = pd.read_csv("../dataset/in.csv", header=None, names=['time', 'laser_id', 'X', 'Y', 'Z'])
 correct = pd.read_csv("../dataset/out.csv", header=None, names=['object_id', 'quantity'])
 
+PENALTY_FOR_INCORRECT_OBJECT_PREDICTION = 10
 
 class AllScenes(Resource):
 
@@ -65,25 +66,6 @@ class Scene(Resource):
 
 
 class Prediction(Resource):
-
-    # parser = reqparse.RequestParser()
-    # parser.add_argument('object_id',
-    #                     type=int,
-    #                     required=True,
-    #                     help='This field better not be blank!'
-    #                     )
-    # parser.add_argument('object_id',
-    #                     type=str,
-    #                     required=True,
-    #                     help='This field better not be blank!',
-    #                     action='append'
-    #                     )
-    # parser.add_argument('quantity',
-    #                     type=str,
-    #                     required=True,
-    #                     help='This field better not be blank!',
-    #                     action='append'
-    #                     )
 
     def get(self, number):
         scene = self.find_scene(number)
@@ -151,13 +133,13 @@ class Prediction(Resource):
             if key in b.keys():
                 total += abs(int(a[key]) - int(b[key]))
             else:
-                total += 10
+                total += PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
 
         for key in b.keys():
             if key in a.keys():
                 total += abs(int(a[key]) - int(b[key]))
             else:
-                total += 10
+                total += PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
 
         i = [k for k in b if k in a if b[k] != a[k]]
         if i:

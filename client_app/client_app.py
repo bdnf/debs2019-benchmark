@@ -45,7 +45,7 @@ if __name__ == "__main__":
     # and submitting prediction for each of them
     # you may change it to fit your needs
 
-    for i in range(10, 12+1):
+    for i in range(1, NUMBER_OF_SCENES+1):
 
         # making GET request
         data = get_scene(i)

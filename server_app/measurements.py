@@ -3,6 +3,9 @@ import sqlite3
 import datetime
 # from difflib import SequenceMatcher
 
+NUMBER_OF_SCENES = 50
+PENALTY_FOR_UNPREDICTED_SCENE = 100
+
 
 class Measurements(Resource):
     @classmethod
@@ -92,14 +95,14 @@ class Measurements(Resource):
             conn.commit()
 
         conn.close()
-        unpredicted_scenes = 50 - scenes_predicted
+        unpredicted_scenes = NUMBER_OF_SCENES - scenes_predicted
         if unpredicted_scenes != 0:
-            overall_time_score += (unpredicted_scenes * 100)
+            overall_time_score += (unpredicted_scenes * PENALTY_FOR_UNPREDICTED_SCENE)
 
         return {'Results': items,
                 'Overall time_score is': overall_time_score,
                 'Predicted scenes': scenes_predicted,
-                'Penalty for not predicted scenes is ': unpredicted_scenes * 100}
+                'Penalty for not predicted scenes is ': unpredicted_scenes * PENALTY_FOR_UNPREDICTED_SCENE}
 
     def get(self):
         result = self.join()
