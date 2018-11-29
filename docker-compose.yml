@@ -1,0 +1,28 @@
+version: "3"
+services:
+  server:
+    container_name: benchmark-server
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "5000:5000"
+    networks:
+          - bench
+
+  client:
+    container_name: client-app
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "6000:6000"
+    depends_on:
+      - server
+    networks:
+          - bench
+
+
+networks:
+    bench: {}

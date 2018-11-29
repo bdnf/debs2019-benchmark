@@ -12,7 +12,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS predictions (
                     )''')
 
 # dummy entry
-cursor.execute('''INSERT INTO predictions(scene, similarity_score, submitted_at) VALUES(101, 3, '2010-05-28T15:36:56.200')''')
+# cursor.execute('''INSERT INTO predictions(scene, similarity_score, submitted_at) VALUES(101, 3, '2010-05-28T15:36:56.200')''')
 
 conn.commit()
 

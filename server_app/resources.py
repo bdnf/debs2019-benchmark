@@ -21,7 +21,7 @@ class AllScenes(Resource):
         for row in result:
             items.append({'scene': row[0], 'similarity_score': row[1], 'client_timestamp': row[2]})
         conn.close()
-        return {'scenes': items}
+        return {'Submitted scenes': items}
 
 
 class Scene(Resource):

@@ -7,7 +7,7 @@ import datetime
 class Measurements(Resource):
     @classmethod
     def compute_score(self, row):
-        import _strptime # solve some sudden crashes "Failed to import _strptime because the import lockis held by"
+        import _strptime # solves some sudden crashes "Failed to import _strptime because the import lockis held by"
         # test1 = int(datetime.datetime.strptime("2018-11-26 16:20:04.485056", "%Y-%m-%d %H:%M:%S.%f").strftime("%s"))
         # test2 = int(datetime.datetime.strptime("2018-11-26 16:21:04.485056", "%Y-%m-%d %H:%M:%S.%f").strftime("%s"))
         # print("test ", test1-test2)
@@ -21,6 +21,7 @@ class Measurements(Resource):
         # print(date2)
         print('Your time for predictions was %s seconds' % time_result) # or / by 60 to get value
         return time_result
+
         """
         correct_object = correct['object_id'].iloc[0]
         correct_quantity = correct['quantity'].iloc[0]
@@ -77,21 +78,19 @@ class Measurements(Resource):
         overall_time_score = 0
         for row in result:
             scenes_predicted +=1
-            print(row)
-            if row[0] > 50:
+            print('Row: ', row)
+            if row[0] > 51:
                 break
             time_score = self.compute_score(row)
             overall_time_score += time_score
             items.append({'scene':row[0], 'similarity_score': row[1], 'started_at': row[2], 'submitted_at': row[3]})
 
-            # the result might be updated fror each scene separately or for all scenes at the end
-            # query = "UPDATE measurements SET time_result=? WHERE scene=?"
-            # cursor.execute(query, (time_score, row[0]))
-            # conn.commit()
+            # the result might be updated fror each scene individually or for all of the scenes once at the end
+            cursor = conn.cursor()
+            query = "UPDATE measurements SET time_result=? WHERE scene=?"
+            cursor.execute(query, (time_score, row[0]))
+            conn.commit()
 
-        query = "UPDATE measurements SET time_result=? WHERE scene=?"
-        cursor.execute(query, (time_score, row[0]))
-        conn.commit()
         conn.close()
         unpredicted_scenes = 50 - scenes_predicted
         if unpredicted_scenes != 0:
