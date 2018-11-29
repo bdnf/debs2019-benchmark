@@ -1,0 +1,5 @@
+Flask==1.0.2
+Flask-RESTful==0.3.6
+jellyfish==0.6.1
+numpy==1.15.4
+pandas==0.23.4
