@@ -6,8 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
-    ports:
-      - "5000:5000"
+
     networks:
           - bench
 
@@ -16,12 +15,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.client
-    ports:
-      - "6000:6000"
+    environment:
+      SERVER_CONTAINER_NAME: $SERVER_CONTAINER_NAME
     depends_on:
       - server
+
     networks:
           - bench
+    tty: true
 
 
 networks:

@@ -53,7 +53,7 @@ class Scene(Resource):
         #     result.append(row.values.tolist())
         # return {'scene': result}
         # [list(x) for x in dt.T.itertuples()]
-        scene = dataset[(dataset.time > int(number) -1) & (dataset.time < int(number))]
+        scene = dataset[(dataset.time > int(number) -1) & (dataset.time < int(number))].head(5)
         #3) result.append([list(x) for x in scene.itertuples()])
         #4) result.append(list(scene.itertuples()))
         #5) result = scene.values.tolist()

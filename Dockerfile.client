@@ -1,26 +1,19 @@
-FROM python:3.6-alpine
+FROM ubuntu:16.04
 
-COPY client_app/requirements.txt /
+# install your dependencies
+RUN apt-get update && apt-get install -y build-essential
+RUN apt-get update && apt-get install -y libtbb-dev
 
-RUN apk --update add --no-cache \
-    lapack-dev \
-    gcc \
-    freetype-dev
+RUN apt-get update && apt-get install -y \
+    python3-pip
 
-# RUN apk add python py-pip python-dev
+RUN python3 -V
+# add your dependencies to the list below
+RUN pip3 install --no-cache-dir requests numpy pandas
 
-# Install dependencies
-RUN apk add --no-cache --virtual .build-deps \
-    gfortran \
-    musl-dev \
-    g++
-RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
+RUN python3 -c "import numpy; print(numpy.__version__)"
 
-RUN pip install -r /requirements.txt
 
-COPY dataset/ /dataset
 COPY client_app/ /app
-WORKDIR /app
-EXPOSE 6000
 
-CMD ["python", "client_app.py"]
+WORKDIR /app

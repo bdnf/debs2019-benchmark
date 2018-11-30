@@ -1,12 +1,12 @@
 import requests
 import json
 import pandas as pd
-
+import os
 NUMBER_OF_SCENES = 50
 
 
-def host_url(path):
-    return "http://127.0.0.1:5000" + path
+def host_url(host, path):
+    return "http://" + host + path
 
 # def get_scenes():
 #     response = requests.get(host_url('/scenes/'))
@@ -17,18 +17,18 @@ def host_url(path):
     # return requests.get(host_url('/scenes/'))
 
 
-def get_scene(number):
-    response = requests.get(host_url('/scene/'+str(number)))
+def get_scene(host, number):
+    response = requests.get(host_url(host, '/scene/'+str(number)))
     if (response.ok):
-        data = json.loads(response.content)
+        data = response.json() #json.loads(response.content)
         print(data)
         return data
     # else: return response
 
 
-def post_answer(scene, payload):
+def post_answer(host, scene, payload):
     headers = {'Content-type': 'application/json'}
-    response = requests.post(host_url('/prediction/scene/'+str(scene)), json = payload, headers=headers)
+    response = requests.post(host_url(host, '/prediction/scene/'+str(scene)), json = payload, headers=headers)
 
     print('Response status is: ', response.status_code)
     if (response.status_code == 201):
@@ -40,7 +40,11 @@ def post_answer(scene, payload):
 
 
 if __name__ == "__main__":
+    print('ENV is ', os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server'))
     print('Getting the scenes for predictions...')
+    host = os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server')
+    if host is None:
+        print('Error reading Server address!')
     # Here is an automated script for getting all scenes
     # and submitting prediction for each of them
     # you may change it to fit your needs
@@ -48,7 +52,7 @@ if __name__ == "__main__":
     for i in range(1, NUMBER_OF_SCENES+1):
 
         # making GET request
-        data = get_scene(i)
+        data = get_scene(host, i)
 
         # example of reconstruction json payload from GET request into DataFrame
         reconstructed_scene = pd.read_json(data['scene'], orient='records')
@@ -59,6 +63,6 @@ if __name__ == "__main__":
         # after making the result in correct form you need to submit it
         # to the corresponding scene
         # via POST request
-        post_answer(scene=i, payload=example_result)
+        post_answer(host, scene=i, payload=example_result)
 
     print('Submission was done successfully!')
