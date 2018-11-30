@@ -41,10 +41,12 @@ def post_answer(host, scene, payload):
 
 if __name__ == "__main__":
     print('ENV is ', os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server'))
-    print('Getting the scenes for predictions...')
+
     host = os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server')
-    if host is None:
+    if host is None or ' ':
         print('Error reading Server address!')
+        host = 'benchmark-server'
+    print('Getting scenes for predictions...')
     # Here is an automated script for getting all scenes
     # and submitting prediction for each of them
     # you may change it to fit your needs

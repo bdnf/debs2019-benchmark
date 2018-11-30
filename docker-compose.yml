@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
+    environment:
+      SERVER_CONTAINER_NAME: 'benchmark-server'
 
     networks:
           - bench
@@ -15,8 +17,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.client
-    environment:
-      SERVER_CONTAINER_NAME: $SERVER_CONTAINER_NAME
+
     depends_on:
       - server
 
