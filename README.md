@@ -59,10 +59,10 @@ However you are free to use any language that suits your needs.
       ```
       $ docker-compose down
       ```
-    This will the benchmark system. Then run:
+    This will stop the previous run of benchmark system. Then run:
       ```
       $ docker-compose up --build
       ```
-    This way Docker Compose will fetch changes that you made to your solution.
+    To rebuild with changes you made.
 
 `Note!` If you willing to use another language for your development you need to change contents of Dockerfile.client to support language of your choice.
