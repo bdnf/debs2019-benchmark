@@ -2,7 +2,6 @@ import requests
 import json
 import pandas as pd
 import os
-NUMBER_OF_SCENES = 50
 
 
 def host_url(host, path):
@@ -17,44 +16,45 @@ def host_url(host, path):
     # return requests.get(host_url('/scenes/'))
 
 
-def get_scene(host, number):
-    response = requests.get(host_url(host, '/scene/'+str(number)))
-    if (response.ok):
-        data = response.json() #json.loads(response.content)
-        print(data)
-        return data
-    # else: return response
+def get_scene(host):
+    return requests.get(host_url(host, '/scene/'))
 
 
-def post_answer(host, scene, payload):
+def post_answer(host, payload):
     headers = {'Content-type': 'application/json'}
-    response = requests.post(host_url(host, '/prediction/scene/'+str(scene)), json = payload, headers=headers)
+    response = requests.post(host_url(host, '/scene/'), json = payload, headers=headers)
 
     print('Response status is: ', response.status_code)
     if (response.status_code == 201):
         return {'status': 'success', 'message': 'updated'}
-    if (response.status_code == 400):
-        print({'message': '''A scene {} already exist.
-                If you want to update your value try to use PUT request'''
-                .format(scene)})
+    if (response.status_code == 404):
+        return {'message':'Something went wrong. No scene exist. Check if the path is correct'}
 
 
 if __name__ == "__main__":
-    print('ENV is ', os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server'))
+    print('ENV is ', os.getenv('BENCHMARK_SYSTEM_URL'))
 
-    host = os.getenv('SERVER_CONTAINER_NAME', default='benchmark-server')
-    if host is None or ' ':
+    host = os.getenv('BENCHMARK_SYSTEM_URL')
+    if host is None or '':
         print('Error reading Server address!')
-        host = 'benchmark-server'
+
     print('Getting scenes for predictions...')
     # Here is an automated script for getting all scenes
     # and submitting prediction for each of them
     # you may change it to fit your needs
 
-    for i in range(1, NUMBER_OF_SCENES+1):
+    while(True):
 
         # making GET request
-        data = get_scene(host, i)
+        response = get_scene(host)
+        if response.status_code == 404:
+            print(response.json())
+            print("Results are: ", requests.get(host_url(host, '/compute_result/')).json())
+            print(requests.get(host_url(host, '/scenes/')).json())
+            break
+
+        data = response.json()
+        print(data)
 
         # example of reconstruction json payload from GET request into DataFrame
         reconstructed_scene = pd.read_json(data['scene'], orient='records')
@@ -65,6 +65,6 @@ if __name__ == "__main__":
         # after making the result in correct form you need to submit it
         # to the corresponding scene
         # via POST request
-        post_answer(host, scene=i, payload=example_result)
+        post_answer(host, payload=example_result)
 
     print('Submission was done successfully!')

@@ -6,8 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
-    environment:
-      SERVER_CONTAINER_NAME: 'benchmark-server'
+    volumes:
+      - ./dataset:/dataset
 
     networks:
           - bench
@@ -17,13 +17,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.client
+    environment:
+      BENCHMARK_SYSTEM_URL: 'server'
 
     depends_on:
       - server
 
     networks:
           - bench
-    tty: true
+    #tty: true
 
 
 networks:

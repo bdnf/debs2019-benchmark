@@ -4,114 +4,124 @@ import sqlite3
 import datetime
 import pandas as pd
 import numpy
+import csv
+import sys
 
-dataset = pd.read_csv("../dataset/in.csv", header=None, names=['time', 'laser_id', 'X', 'Y', 'Z'])
+in_file = "../dataset/in.csv"
+out_file = "../dataset/out.csv"
 correct = pd.read_csv("../dataset/out.csv", header=None, names=['object_id', 'quantity'])
+current_scene = 0
+TOTAL_SCENES = 50
 
-PENALTY_FOR_INCORRECT_OBJECT_PREDICTION = 10
 
-class AllScenes(Resource):
+class Benchmark(Resource):
+    PENALTY_FOR_INCORRECT_OBJECT_PREDICTION = 10
+    PENALTY_FOR_INCORRECT_VALUE_PREDICTION = 5
+
+    total_time_score = 0
 
     def get(self):
-        conn = sqlite3.connect('debs.db')
-        cursor = conn.cursor()
+        global current_scene
+        current_scene +=1
+        print("Requested scene %s" % current_scene)
+        sys.stdout.flush()
 
-        query = "SELECT * FROM predictions"
-        result = cursor.execute(query)
-        items = []
-        for row in result:
-            items.append({'scene': row[0], 'similarity_score': row[1], 'client_timestamp': row[2]})
-        conn.close()
-        return {'Submitted scenes': items}
+        if current_scene >= TOTAL_SCENES:
+            if Benchmark.total_time_score == 0:
+                return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
+                        'total runtime': 'An error occured when computing total runtime. Please rebuild the Benchmark server'}, 404
+            else:
+                return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
+                        'total runtime': Benchmark.total_time_score}, 404
 
+        self.get_timestamp(current_scene)
+        result = []
+        # with loading into memory
+        # scene = dataset[(dataset.time > int(current_scene) -1) & (dataset.time < int(current_scene))].head(5)
+        # result = scene.to_json(orient='records')
 
-class Scene(Resource):
+        # csv reader way
+        # with open("../dataset/in.csv", 'r') as f:
+        #     reader = csv.reader(f)
+        #     for line in reader:
+        #         scene_index = float(line[0])
+        #         if scene_index > current_scene-1 and scene_index < current_scene:
+        #              data = {
+        #                 'timestamp': line[0],
+        #                 'laser_id': line[1],
+        #                 'X': line[2],
+        #                 'Y': line[3],
+        #                 'Z': line[4]
+        #              }
+        #              result.append(data)
+
+        # fastest way with Pandas
+        df = pd.read_csv(in_file, sep=',', header = None, names=['time', 'laser_id', 'X', 'Y', 'Z'], skiprows= (current_scene-1)*72000, nrows=72000)
+        result = df.head(5).to_json(orient='records')
+
+        return {'scene': result}
 
     @classmethod
     def get_timestamp(self, number):
 
         conn = sqlite3.connect('debs.db')
         cursor = conn.cursor()
-        query = "SELECT * FROM measurements WHERE scene=?"
-        result = cursor.execute(query, (number,))
-        row = result.fetchone()
-        if row:
-            cursor.execute("DELETE FROM measurements WHERE scene=?", (number,))
 
-        query = "INSERT INTO measurements VALUES(?,?,?)"
-        cursor.execute(query, (number, 0, datetime.datetime.now()))
+        query = "INSERT INTO predictions (scene, requested_at) VALUES(?,?)"
+        start_time = datetime.datetime.now()
+        cursor.execute(query, (number, start_time))
         conn.commit()
         conn.close()
 
-    def get(self, number):
-        self.get_timestamp(number)
-        result = []
-
-        #1) return {'scene': armIn[(armIn.time > int(number) -1) & (armIn.time < int(number))].to_dict(orient='list')}
-        #2)
-        # for ix, row in armIn[(armIn.time > int(number) -1) & (armIn.time < int(number))].iterrows(): # TODO
-        #     result.append(row.values.tolist())
-        # return {'scene': result}
-        # [list(x) for x in dt.T.itertuples()]
-        scene = dataset[(dataset.time > int(number) -1) & (dataset.time < int(number))].head(5)
-        #3) result.append([list(x) for x in scene.itertuples()])
-        #4) result.append(list(scene.itertuples()))
-        #5) result = scene.values.tolist()
-        #6) result = scene.to_dict('list')
-        # result = scene.to_dict('records')
-        # result = scene.to_dict(orient="index")
-        # result = scene.to_json()
-        result = scene.to_json(orient='records')
-        return {'scene': result}
-
-
-class Prediction(Resource):
-
-    def get(self, number):
-        scene = self.find_scene(number)
-        if scene:
-            return scene
-
-        return {'message': 'Predictions on these scene are not found'}, 404
-
-    @classmethod
-    def find_scene(cls, number):
-        conn = sqlite3.connect('debs.db')
-        cursor = conn.cursor()
-
-        query = "SELECT * FROM predictions WHERE scene=?"
-        result = cursor.execute(query, (number,))
-        row = result.fetchone()
-        conn.close()
-        if row:
-            return {'scene': {'scene': row[0], 'similarity_score': row[1]}}
-
-    def post(self, number):
-        if self.find_scene(number):
-            return {'message': "A scene {} already exist.".format(number)}, 400
+    def post(self):
+        global current_scene
         score = 0
+
+        print('Submitted scene %s' % current_scene)
+        if self.scene_exists(current_scene):
+            return {'message': "Scene {} already exist.".format(current_scene)}, 400
         correct_dict = self.fetch_correct_result()
         your_dict = request.get_json()
+        submission_time = datetime.datetime.now()
         print(' Correct prediction', correct_dict)
+        your_dict = {str(k):int(v) for k,v in your_dict.items()}
         print(' Your prediction', your_dict)
+        sys.stdout.flush()
+
         if your_dict:
-            score = self.diff_dicts(correct_dict, your_dict)
+            score = Benchmark.diff_dicts(correct_dict, your_dict)
 
         # data = Prediction.parser.parse_args()
         # result = {'scene': number, 'object_id': self.check_objects(data['object_id']), 'quantity': self.check_object(data['quantity'])}
-        result = {'scene': number, 'similarity_score': score}
-        print(result)
-
+        submission_result = {'scene': current_scene, 'accuracy': score}
         try:
-            self.insert(result)
+            self.insert(submission_result, submission_time)
         except:
             return {'message': 'An error occured while inserting the item'}, 500
 
-        return {'Your score for this scene is ': result['similarity_score']}, 201
+        return {'Your score for this scene is ': submission_result['accuracy']}, 201
 
     @classmethod
-    def check_objects(cls, result):
-        return ','.join(result)
+    def insert(cls, result, stop_time):
+        conn = sqlite3.connect('debs.db')
+        cursor = conn.cursor()
+
+        select = "SELECT requested_at FROM predictions WHERE scene=?"
+        cursor.execute(select, (result['scene'],))
+        start_time = cursor.fetchone()
+
+        unix_start_time = (datetime.datetime.strptime(str(start_time[0]), "%Y-%m-%d %H:%M:%S.%f")).strftime("%s")
+        unix_stop_time = stop_time.strftime("%s")
+        time_diff = int(unix_stop_time) - int(unix_start_time)
+        Benchmark.total_time_score += time_diff
+        print('Your prediction time for this scene was %s seconds' % time_diff)
+
+        cursor = conn.cursor()
+        query = "UPDATE predictions SET accuracy=?, prediction_speed =?, submitted_at=? WHERE scene=?"
+
+        cursor.execute(query, (result['accuracy'], time_diff, stop_time, result['scene']))
+        conn.commit()
+        conn.close()
 
     @classmethod
     def fetch_correct_result(cls):
@@ -122,7 +132,6 @@ class Prediction(Resource):
         else:
             correct_quantity = correct_quantity.split(',')
         res = dict(zip(correct_object, correct_quantity))
-        print(res)
         return res
 
     @classmethod
@@ -133,75 +142,78 @@ class Prediction(Resource):
             if key in b.keys():
                 total += abs(int(a[key]) - int(b[key]))
             else:
-                total += PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
+                total += Benchmark.PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
 
         for key in b.keys():
             if key in a.keys():
                 total += abs(int(a[key]) - int(b[key]))
             else:
-                total += PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
+                total += Benchmark.PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
 
         i = [k for k in b if k in a if b[k] != a[k]]
         if i:
             for k in i:
-                print('Your predictions are not correct: your predicted [%s] = %s but was expected [%s] = %s' % (k, b[k], k, a[k]) )
+                print("""Your prediction is not correct:
+                         your predicted [%s] = %s but was expected [%s] = %s""" % (k, b[k], k, a[k]) )
+                total += Benchmark.PENALTY_FOR_INCORRECT_VALUE_PREDICTION
 
         else:
             i = [k for k in b if k in a if a[k] != b[k]]
             if i:
                 for k in i:
-                    print('Else Your predictions are not correct: your predicted [%s] = %s but was expected [%s] = %s' % (k, b[k], k, a[k]) )
-        print("Difference ", total)
+                    print("""Your prediction is not correct:
+                            your predicted [%s] = %s but was expected [%s] = %s""" % (k, b[k], k, a[k]) )
+                    total += Benchmark.PENALTY_FOR_INCORRECT_VALUE_PREDICTION
+
+        print("Difference score %s" % total)
         return total
 
     @classmethod
-    def insert(cls, result):
+    def scene_exists(cls, number):
         conn = sqlite3.connect('debs.db')
         cursor = conn.cursor()
 
-        query = "INSERT INTO predictions VALUES(?,?,?)"
-        print(result['scene'])
-        cursor.execute(query, (result['scene'], result['similarity_score'], datetime.datetime.now()))
-        conn.commit()
+        query = "SELECT prediction_speed FROM predictions WHERE scene=?"
+        cursor.execute(query, (number,))
+        row = cursor.fetchone()
         conn.close()
-
-
-""" This additional functionality may be added later.
-
-    def put(self, number):
-
-        correct_dict = self.fetch_correct_result()
-        your_dict = request.get_json()
-        print(your_dict)
-        self.diff_dicts(correct_dict, your_dict)
         try:
-            data = Prediction.parser.parse_args()  # request.get_json()
-            res = self.find_scene(number)
-
+            if row[0]:
+                return True
         except:
-            return {'message': 'Probably and invalid JSON object was passed'}, 400
+            return True
 
-        updated_result = {'scene': number, 'object_id': self.check_objects(data['object_id']), 'quantity': self.check_objects(data['quantity'])}
-        print("Updated result", updated_result)
 
-        if res is None:
-            try:
-                self.insert(updated_result)
-            except:
-                return {'message': 'An error occured while inserting the item'}, 500
-        else:
-            try:
-                self.update(updated_result)
-            except:
-                return {'message': 'An error occured while updating the predicition'}, 500
-        return updated_result
+class BenchmarkSummary(Resource):
 
-    @classmethod
-    def update(cls, result):
+    def get(self):
         conn = sqlite3.connect('debs.db')
         cursor = conn.cursor()
 
-        query = "UPDATE predictions SET score=?, submitted_at=? WHERE scene=?"
-        cursor.execute(query, (result['similarity_score'], datetime.datetime.now(), result['scene']))
-        conn.commit()
-        conn.close() """
+        query = "SELECT * FROM predictions"
+        result = cursor.execute(query)
+        items = []
+        for row in result:
+            items.append({'scene': row[0],
+                          'accuracy': row[1],
+                          'prediction_speed': row[2],
+                          'requested_at': row[3],
+                          'submitted_at': row[4]})
+        conn.close()
+        return {'Submitted scenes': items,
+                'total runtime': Benchmark.total_time_score}
+
+
+class BenchmarkResults(Resource):
+    def get(self):
+        conn = sqlite3.connect('debs.db')
+        cursor = conn.cursor()
+
+        query = "SELECT SUM(accuracy), SUM(prediction_speed) FROM predictions"
+        cursor.execute(query)
+        result = cursor.fetchone()
+
+        conn.close()
+        return {'total accuracy': result[0],
+                'total runtime from db': result[1],
+                'total runtime': Benchmark.total_time_score}
