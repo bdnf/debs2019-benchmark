@@ -40,11 +40,13 @@ However you are free to use any language that suits your needs.
 1. Clone this repository
 2. Use the project structure as it is. Place all your code in /client_app folder, and your .csv files into `/dataset` folder.
 3. Implement your HTTP-client as RESTful web service (you may see an example implementation in `client_app.py`).
-    Basically this means, that you client should request data via GET method, and submit your answer via POST method.
-    Use `/scene/` path for your requests.
-    For each GET request you will receive a new chunk of data with a specific scene.
-    After you submit your answer to this scene via POST request - new scene will be available to you via new GET request.
-    After all 50 scenes were submitted to our benchmark system your client should stop upon seeing 404 status code. Now you ready for the next step.
+
+    >Basically this means, that you client should request data via GET method, and submit your answer >via POST method.
+    >Use `/scene/` path for your requests.
+    >For each GET request you will receive a new chunk of data with a specific scene.
+    >After you submit your answer to this scene via POST request - new scene will be available to you >via new GET request.
+    >After all 50 scenes were submitted to our benchmark system your client should stop upon seeing >`404` status code. Now you ready for the next step.
+
 4. Add your dependencies to `Dockerfile.client`. If you use Python, check `line 12`, and add dependencies that you may need for your client system to run.
 5. To start the evaluation of your solution run:
     ```
@@ -55,7 +57,8 @@ However you are free to use any language that suits your needs.
       ```
       $ docker logs benchmark-system
       ```
-7. Make changes to your system if needed. After any change to your system or HTTP-client, please run these commands:
+7. Make changes to your system if needed.
+After any change to your system or HTTP-client, please run these commands:
       ```
       $ docker-compose down
       ```
