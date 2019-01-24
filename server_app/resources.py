@@ -6,35 +6,44 @@ import pandas as pd
 import numpy
 import csv
 import sys
+import os.path
+import subprocess
+import metrics
 
 in_file = "../dataset/in.csv"
 out_file = "../dataset/out.csv"
-correct = pd.read_csv("../dataset/out.csv", header=None, names=['object_id', 'quantity'])
 current_scene = 0
-TOTAL_SCENES = 50
+
+TOTAL_SCENES = int(subprocess.check_output(["tail", "-1", in_file]).decode('ascii').split(",")[0].split('.')[0])
+out_scenes = int(subprocess.check_output(["tail", "-1", out_file]).decode('ascii').split(",")[0].split('.')[0])
+
+if not os.path.isfile(in_file):
+    print("in.csv file not found")
+    #raise FileNotFoundError()
+    exit(1)
+    
+#if (TOTAL_SCENES != out_scenes) raise ValueError("Mismatch of scenes in in.csv and out.csv files. Check if amount of total scenes equal")
 
 
 class Benchmark(Resource):
-    PENALTY_FOR_INCORRECT_OBJECT_PREDICTION = 10
-    PENALTY_FOR_INCORRECT_VALUE_PREDICTION = 5
 
     total_time_score = 0
 
     def get(self):
-        global current_scene
+        global current_scene, TOTAL_SCENES
+
+        if current_scene >= TOTAL_SCENES:
+                return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
+                        'results:': BenchmarkResults.results()}, 404
+
         current_scene +=1
         print("Requested scene %s" % current_scene)
         sys.stdout.flush()
 
-        if current_scene >= TOTAL_SCENES:
-            if Benchmark.total_time_score == 0:
-                return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
-                        'total runtime': 'An error occured when computing total runtime. Please rebuild the Benchmark server'}, 404
-            else:
-                return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
-                        'total runtime': Benchmark.total_time_score}, 404
-
-        self.get_timestamp(current_scene)
+        try:
+            self.get_timestamp(current_scene)
+        except sqlite3.IntegrityError:
+            return {"Benchmark error": "Please restart your benchmark-server to be able to submit new results"}, 404
         result = []
         # with loading into memory
         # scene = dataset[(dataset.time > int(current_scene) -1) & (dataset.time < int(current_scene))].head(5)
@@ -57,7 +66,7 @@ class Benchmark(Resource):
 
         # fastest way with Pandas
         df = pd.read_csv(in_file, sep=',', header = None, names=['time', 'laser_id', 'X', 'Y', 'Z'], skiprows= (current_scene-1)*72000, nrows=72000)
-        result = df.head(5).to_json(orient='records')
+        result = df.to_json(orient='records')
 
         return {'scene': result}
 
@@ -89,11 +98,15 @@ class Benchmark(Resource):
         sys.stdout.flush()
 
         if your_dict:
-            score = Benchmark.diff_dicts(correct_dict, your_dict)
+            #score = Benchmark.diff_dicts(correct_dict, your_dict)
+            score = metrics.accuracy(correct_dict,your_dict)
+            score2 = metrics.precision(correct_dict,your_dict)
+            score3 = metrics.recall(correct_dict,your_dict)
+            # print("accuracy", score)
+            # print("precision", score2)
+            # print("recall", score3)
 
-        # data = Prediction.parser.parse_args()
-        # result = {'scene': number, 'object_id': self.check_objects(data['object_id']), 'quantity': self.check_object(data['quantity'])}
-        submission_result = {'scene': current_scene, 'accuracy': score}
+        submission_result = {'scene': current_scene, 'accuracy': score, 'precision': score2, 'recall':score3}
         try:
             self.insert(submission_result, submission_time)
         except:
@@ -117,56 +130,16 @@ class Benchmark(Resource):
         print('Your prediction time for this scene was %s seconds' % time_diff)
 
         cursor = conn.cursor()
-        query = "UPDATE predictions SET accuracy=?, prediction_speed =?, submitted_at=? WHERE scene=?"
+        query = "UPDATE predictions SET accuracy=?, precision=?, recall=?, prediction_speed =?, submitted_at=? WHERE scene=?"
 
-        cursor.execute(query, (result['accuracy'], time_diff, stop_time, result['scene']))
+        cursor.execute(query, (result['accuracy'], result['precision'], result['recall'], time_diff, stop_time, result['scene']))
         conn.commit()
         conn.close()
 
     @classmethod
     def fetch_correct_result(cls):
-        correct_object = correct['object_id'].iloc[0].split(',')
-        correct_quantity = correct['quantity'].iloc[0]
-        if (isinstance(correct_quantity, int)) or (isinstance(correct_quantity, numpy.int64)):
-            correct_quantity = [correct_quantity]
-        else:
-            correct_quantity = correct_quantity.split(',')
-        res = dict(zip(correct_object, correct_quantity))
-        return res
-
-    @classmethod
-    def diff_dicts(cls, a, b):
-        # print(a.keys() & b.keys())
-        total = 0
-        for key in a.keys():
-            if key in b.keys():
-                total += abs(int(a[key]) - int(b[key]))
-            else:
-                total += Benchmark.PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
-
-        for key in b.keys():
-            if key in a.keys():
-                total += abs(int(a[key]) - int(b[key]))
-            else:
-                total += Benchmark.PENALTY_FOR_INCORRECT_OBJECT_PREDICTION
-
-        i = [k for k in b if k in a if b[k] != a[k]]
-        if i:
-            for k in i:
-                print("""Your prediction is not correct:
-                         your predicted [%s] = %s but was expected [%s] = %s""" % (k, b[k], k, a[k]) )
-                total += Benchmark.PENALTY_FOR_INCORRECT_VALUE_PREDICTION
-
-        else:
-            i = [k for k in b if k in a if a[k] != b[k]]
-            if i:
-                for k in i:
-                    print("""Your prediction is not correct:
-                            your predicted [%s] = %s but was expected [%s] = %s""" % (k, b[k], k, a[k]) )
-                    total += Benchmark.PENALTY_FOR_INCORRECT_VALUE_PREDICTION
-
-        print("Difference score %s" % total)
-        return total
+        a = Benchmark.read_csv(out_file, current_scene)
+        return Benchmark.list_to_dict(a)
 
     @classmethod
     def scene_exists(cls, number):
@@ -182,6 +155,26 @@ class Benchmark(Resource):
                 return True
         except:
             return True
+
+    @classmethod
+    def read_csv(cls, out_file, scene):
+            with open(out_file, 'r') as f:
+                reader = csv.reader(f)
+                for line in reader:
+                    scene_index = float(line[0])
+                    if scene_index == scene:
+                        return line[1:]
+
+    @classmethod
+    def list_to_dict(cls,a):
+
+        my_dict = {}
+        if not a:
+            return my_dict
+        for index, item in enumerate(a):
+            if index % 2 == 0:
+                my_dict[item] = a[index+1]
+        return my_dict
 
 
 class BenchmarkSummary(Resource):
@@ -205,15 +198,26 @@ class BenchmarkSummary(Resource):
 
 
 class BenchmarkResults(Resource):
-    def get(self):
+    @classmethod
+    def results(cls):
         conn = sqlite3.connect('debs.db')
         cursor = conn.cursor()
 
-        query = "SELECT SUM(accuracy), SUM(prediction_speed) FROM predictions"
+        query = "SELECT AVG(accuracy), AVG(precision), AVG(recall), SUM(prediction_speed) FROM predictions"
         cursor.execute(query)
         result = cursor.fetchone()
 
         conn.close()
-        return {'total accuracy': result[0],
-                'total runtime from db': result[1],
+        print('FINAL_RESULT average accuracy %s' % result[0])
+        print('FINAL_RESULT average precision %s' % result[1])
+        print('FINAL_RESULT average recall %s' % result[2])
+        print('FINAL_RESULT total db runtime %s' % result[3])
+
+        return {'average accuracy': result[0],
+                'average precision': result[1],
+                'average recall': result[2],
+                'total runtime from db': result[3],
                 'total runtime': Benchmark.total_time_score}
+
+    def get(self):
+        self.results()

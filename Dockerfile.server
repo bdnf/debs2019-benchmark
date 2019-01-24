@@ -13,7 +13,7 @@ RUN python3 -V
 # add your dependencies to the list below
 RUN pip3 install --no-cache-dir -r /requirements.txt
 
-COPY dataset/ /dataset
+#COPY dataset/ /dataset
 COPY server_app/ /app
 WORKDIR /app
 
