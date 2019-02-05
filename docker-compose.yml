@@ -1,11 +1,12 @@
 version: "3"
 services:
   server:
+    #image: debs2019challenge/benchmark-server
     container_name: benchmark-server
-    restart: always
     build:
       context: .
       dockerfile: Dockerfile.server
+    restart: always
     volumes:
       - ./dataset:/dataset
 
@@ -19,7 +20,8 @@ services:
       dockerfile: Dockerfile.client
     environment:
       BENCHMARK_SYSTEM_URL: 'server'
-
+    volumes:
+      - ./dataset:/dataset
     depends_on:
       - server
 

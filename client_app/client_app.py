@@ -3,17 +3,31 @@ import json
 import pandas as pd
 import os
 
+import sys
+import csv
+out_file = "../dataset/out.csv"
+import subprocess
+
+
+
+def read_csv(out_file, scene):
+        with open(out_file, 'r') as f:
+            reader = csv.reader(f)
+            for line in reader:
+                scene_index = float(line[0])
+                if scene_index == scene:
+                    return line[1:]
+
+def list_to_dict(a):
+    my_dict = {}
+    for index, item in enumerate(a):
+        if index % 2 == 0:
+            my_dict[item] = a[index+1]
+    return my_dict
+
 
 def host_url(host, path):
     return "http://" + host + path
-
-# def get_scenes():
-#     response = requests.get(host_url('/scenes/'))
-#     if (response.ok):
-#         data = json.loads(response.content)
-#         print(data)
-#         return data
-    # return requests.get(host_url('/scenes/'))
 
 
 def get_scene(host):
@@ -28,43 +42,46 @@ def post_answer(host, payload):
     if (response.status_code == 201):
         return {'status': 'success', 'message': 'updated'}
     if (response.status_code == 404):
-        return {'message':'Something went wrong. No scene exist. Check if the path is correct'}
+        return {'message': 'Something went wrong. No scene exist. Check if the path is correct'}
 
 
 if __name__ == "__main__":
     print('ENV is ', os.getenv('BENCHMARK_SYSTEM_URL'))
+    print(subprocess.check_output(['pwd']))
 
     host = os.getenv('BENCHMARK_SYSTEM_URL')
     if host is None or '':
         print('Error reading Server address!')
 
     print('Getting scenes for predictions...')
+
     # Here is an automated script for getting all scenes
     # and submitting prediction for each of them
-    # you may change it to fit your needs
-
+    # you may change to fit your needs
+    scene = 0
     while(True):
 
-        # making GET request
+        # Making GET request
+        # Each request will fetch new scene
         response = get_scene(host)
         if response.status_code == 404:
             print(response.json())
-            print("Results are: ", requests.get(host_url(host, '/compute_result/')).json())
-            print(requests.get(host_url(host, '/scenes/')).json())
+            sys.stdout.flush()
             break
 
         data = response.json()
-        print(data)
 
         # example of reconstruction json payload from GET request into DataFrame
-        reconstructed_scene = pd.read_json(data['scene'], orient='records')
+        #reconstructed_scene = pd.read_json(data['scene'], orient='records')
+        a = read_csv(out_file, scene % 500)
+        example_result = list_to_dict(a)
         # DO YOUR PREDICTIONS HERE
         # return the result in format in plain json:
         # for example:
-        example_result = {'car': 1, 'armchair': 2}
-        # after making the result in correct form you need to submit it
-        # to the corresponding scene
-        # via POST request
-        post_answer(host, payload=example_result)
+        #example_result = {'car': 1, 'armchair': 2}
+        # after making sure the result in correct form you need to submit it
+        # via POST request:
+        post_answer(host, example_result)
+        scene += 1
 
-    print('Submission was done successfully!')
+    print('Submission for all scenes done successfully!')

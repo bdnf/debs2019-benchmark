@@ -20,7 +20,10 @@ def accuracy(a, b):
         true_values_sum = reduce(lambda x,y:int(x)+int(y),all_keys.values())
         pred_values_sum = reduce(lambda x,y:int(x)+int(y),pred.values())
         val_score = int(pred_values_sum)/int(true_values_sum)
-        return (score+val_score)/2 #avg
+        if score >= val_score:
+            return (score+val_score)/2
+        else:
+            return score
 
 
 def precision(a,b):
@@ -36,7 +39,10 @@ def precision(a,b):
         true_values_sum = reduce(lambda x,y:int(x)+int(y),a.values())
         pred_values_sum = reduce(lambda x,y:int(x)+int(y),pred.values())
         val_score = int(pred_values_sum)/int(true_values_sum)
-        return (score+val_score)/2
+        if score >= val_score:
+            return (score+val_score)/2
+        else:
+            return score
 
 def recall(a,b):
     common_keys = set(a).intersection(b)
@@ -50,15 +56,18 @@ def recall(a,b):
         true_values_sum = reduce(lambda x,y:int(x)+int(y),b.values())
         pred_values_sum = reduce(lambda x,y:int(x)+int(y),pred.values())
         val_score = int(pred_values_sum)/int(true_values_sum)
-        return (score+val_score)/2
+        if score >= val_score:
+            return (score+val_score)/2
+        else:
+            return score
 
-c = {'Pedestrian': '2',
- 'BigSassafras': '1',
- 'Bench': '1'}
-d  = {'Pedestrian': '2',
- 'BigSassafras': '1',
- 'Bench': '1'}
-
-print(accuracy(c,d))
-print(precision(c,d))
-print(recall(c,d))
+# c = {'Pedestrian': '2',
+#  'BigSassafras': '1',
+#  'Bench': '1'}
+# d  = {'Pedestrian': '2',
+#  'BigSassafras': '1',
+#  'Bench': '1'}
+#
+# print(accuracy(c,d))
+# print(precision(c,d))
+# print(recall(c,d))

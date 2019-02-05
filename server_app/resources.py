@@ -14,15 +14,28 @@ in_file = "../dataset/in.csv"
 out_file = "../dataset/out.csv"
 current_scene = 0
 
-TOTAL_SCENES = int(subprocess.check_output(["tail", "-1", in_file]).decode('ascii').split(",")[0].split('.')[0])
-out_scenes = int(subprocess.check_output(["tail", "-1", out_file]).decode('ascii').split(",")[0].split('.')[0])
-
 if not os.path.isfile(in_file):
-    print("in.csv file not found")
+    print("in.csv file not found. Please put datafiles in /dataset folder")
     #raise FileNotFoundError()
     exit(1)
-    
+
+TOTAL_SCENES = int(subprocess.check_output(["tail", "-1", in_file]).decode('ascii').split(",")[0].split('.')[0]) + 1
+try:
+    out_scenes = int(subprocess.check_output(["tail", "-1", out_file]).decode('ascii').split(",")[0].split('.')[0]) + 1
+except FileNotFoundError:
+    out_scenes = 500
+
 #if (TOTAL_SCENES != out_scenes) raise ValueError("Mismatch of scenes in in.csv and out.csv files. Check if amount of total scenes equal")
+if current_scene != 0:
+    num_rows_to_skip = current_scene*72000
+    print("to skip: ", num_rows_to_skip)
+    df = pd.read_csv(in_file, sep=',', header = None, names=['time', 'laser_id', 'X', 'Y', 'Z'], iterator=True, skiprows=num_rows_to_skip)
+    #print(df.get_chunk(5))
+    # all_rows = int(subprocess.check_output(["cat " + in_file + " | wc -l"]))
+    # assert(num_rows_to_skip < all_rows)
+else:
+    df = pd.read_csv(in_file, sep=',', header = None, names=['time', 'laser_id', 'X', 'Y', 'Z'], iterator=True)
+#TODO improve global state
 
 
 class Benchmark(Resource):
@@ -30,7 +43,7 @@ class Benchmark(Resource):
     total_time_score = 0
 
     def get(self):
-        global current_scene, TOTAL_SCENES
+        global current_scene, TOTAL_SCENES, df
 
         if current_scene >= TOTAL_SCENES:
                 return {'message': 'Last scene reached. No more scenes left. Please, check you detailed results now',
@@ -44,29 +57,14 @@ class Benchmark(Resource):
             self.get_timestamp(current_scene)
         except sqlite3.IntegrityError:
             return {"Benchmark error": "Please restart your benchmark-server to be able to submit new results"}, 404
+
         result = []
-        # with loading into memory
-        # scene = dataset[(dataset.time > int(current_scene) -1) & (dataset.time < int(current_scene))].head(5)
-        # result = scene.to_json(orient='records')
-
-        # csv reader way
-        # with open("../dataset/in.csv", 'r') as f:
-        #     reader = csv.reader(f)
-        #     for line in reader:
-        #         scene_index = float(line[0])
-        #         if scene_index > current_scene-1 and scene_index < current_scene:
-        #              data = {
-        #                 'timestamp': line[0],
-        #                 'laser_id': line[1],
-        #                 'X': line[2],
-        #                 'Y': line[3],
-        #                 'Z': line[4]
-        #              }
-        #              result.append(data)
-
-        # fastest way with Pandas
-        df = pd.read_csv(in_file, sep=',', header = None, names=['time', 'laser_id', 'X', 'Y', 'Z'], skiprows= (current_scene-1)*72000, nrows=72000)
-        result = df.to_json(orient='records')
+        sc = df.get_chunk(72000)
+        if (int(sc["time"].iloc[0]) != int(sc["time"].iloc[-1])):
+            #TODO add fail-over case
+            raise ValueError("scene probably has incorrect number of rows", len(sc.index))
+        #print(sc.tail(5))
+        result = sc.to_json(orient='records')
 
         return {'scene': result}
 
@@ -90,21 +88,25 @@ class Benchmark(Resource):
         if self.scene_exists(current_scene):
             return {'message': "Scene {} already exist.".format(current_scene)}, 400
         correct_dict = self.fetch_correct_result()
+        if not correct_dict:
+            return {'message': "There is no reuslt dataexist for scene {}.".format(current_scene)}, 400
         your_dict = request.get_json()
         submission_time = datetime.datetime.now()
         print(' Correct prediction', correct_dict)
         your_dict = {str(k):int(v) for k,v in your_dict.items()}
         print(' Your prediction', your_dict)
         sys.stdout.flush()
-
+        score = 0
+        score2 = 0
+        score3 = 0
         if your_dict:
             #score = Benchmark.diff_dicts(correct_dict, your_dict)
             score = metrics.accuracy(correct_dict,your_dict)
             score2 = metrics.precision(correct_dict,your_dict)
             score3 = metrics.recall(correct_dict,your_dict)
-            # print("accuracy", score)
-            # print("precision", score2)
-            # print("recall", score3)
+            print("scene accuracy", score)
+            print("scene precision", score2)
+            print("scene recall", score3)
 
         submission_result = {'scene': current_scene, 'accuracy': score, 'precision': score2, 'recall':score3}
         try:
@@ -138,7 +140,7 @@ class Benchmark(Resource):
 
     @classmethod
     def fetch_correct_result(cls):
-        a = Benchmark.read_csv(out_file, current_scene)
+        a = Benchmark.read_csv(out_file, current_scene-1)
         return Benchmark.list_to_dict(a)
 
     @classmethod
@@ -154,7 +156,7 @@ class Benchmark(Resource):
             if row[0]:
                 return True
         except:
-            return True
+            return False
 
     @classmethod
     def read_csv(cls, out_file, scene):
